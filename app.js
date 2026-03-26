@@ -13,6 +13,13 @@ function loadState() {
     if (saved) {
         state = JSON.parse(saved);
     }
+    
+    // Load Sync URL
+    const syncUrl = localStorage.getItem('junkho_sync_url');
+    if (syncUrl) {
+        document.getElementById('syncUrlInput').value = syncUrl;
+    }
+    
     renderAll();
 }
 
@@ -706,6 +713,81 @@ function importData(event) {
         event.target.value = '';
     };
     reader.readAsText(file);
+}
+
+// --- Cloud Sync Logic ---
+async function uploadToCloud() {
+    const url = document.getElementById('syncUrlInput').value.trim();
+    if (!url) {
+        alert("Please enter a Google Apps Script URL first.");
+        return;
+    }
+
+    localStorage.setItem('junkho_sync_url', url);
+    updateSyncStatus('Syncing...', 'bg-blue-500/20 text-blue-400');
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            mode: 'no-cors', // Standard Apps Script approach
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(state)
+        });
+        
+        // Note: With no-cors, we can't read the response body, 
+        // but it's the only way to avoid CORS errors with regular App Script URLs from browser.
+        updateSyncStatus('Successfully Uploaded!', 'bg-accent-green/20 text-accent-green');
+    } catch (error) {
+        console.error('Upload error:', error);
+        updateSyncStatus('Upload Failed', 'bg-accent-red/20 text-accent-red');
+    }
+}
+
+async function downloadFromCloud() {
+    const url = document.getElementById('syncUrlInput').value.trim();
+    if (!url) {
+        alert("Please enter a Google Apps Script URL first.");
+        return;
+    }
+
+    localStorage.setItem('junkho_sync_url', url);
+    updateSyncStatus('Fetching...', 'bg-blue-500/20 text-blue-400');
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const cloudData = await response.json();
+        
+        if (cloudData && (cloudData.projects || cloudData.inventory)) {
+            if (confirm("Data found in cloud! This will overwrite your current local data. Continue?")) {
+                state = cloudData;
+                saveState();
+                renderAll();
+                updateSyncStatus('Data Synced!', 'bg-accent-green/20 text-accent-green');
+            } else {
+                updateSyncStatus('Sync Cancelled', 'bg-yellow-500/20 text-yellow-500');
+            }
+        } else {
+            updateSyncStatus('No Data in Cloud', 'bg-yellow-500/20 text-yellow-500');
+        }
+    } catch (error) {
+        console.error('Download error:', error);
+        updateSyncStatus('Sync Failed', 'bg-accent-red/20 text-accent-red');
+        alert("Make sure the URL is correct and Google App Script is deployed as Web App (Anyone).");
+    }
+}
+
+function updateSyncStatus(text, classes) {
+    const status = document.getElementById('syncStatus');
+    status.textContent = text;
+    status.className = `p-3 rounded-lg text-center text-xs font-bold uppercase tracking-widest ${classes}`;
+    status.classList.remove('hidden');
+    setTimeout(() => {
+        status.classList.add('hidden');
+    }, 3000);
 }
 
 // Initialize

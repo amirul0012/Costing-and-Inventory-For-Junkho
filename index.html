@@ -77,7 +77,7 @@
     <!-- Sidebar -->
     <aside class="w-64 glass-card h-screen sticky top-0 flex flex-col p-6 space-y-8 z-50">
         <div class="flex flex-col items-center mb-8 pt-2">
-            <img src="logo.png" alt="Junkho Studio Logo" class="w-48 h-auto object-contain brightness-125 drop-shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+            <img src="logo.png" alt="Junkho Studio Logo" class="w-48 h-auto object-contain [filter:brightness(0)_invert(1)] opacity-70 hover:opacity-100 transition-opacity duration-300">
         </div>
 
         <nav class="flex-1 space-y-2">
@@ -92,6 +92,10 @@
             <button onclick="showSection('inventory')" id="nav-inventory" class="sidebar-link w-full flex items-center space-x-3 p-3 rounded-lg transition-all hover:bg-white/5">
                 <i data-lucide="box" class="w-5 h-5"></i>
                 <span class="font-medium">Inventory</span>
+            </button>
+            <button onclick="toggleModal('syncModal')" class="sidebar-link w-full flex items-center space-x-3 p-3 rounded-lg transition-all hover:bg-accent-blue/10 text-accent-blue hover:text-blue-400">
+                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                <span class="font-medium">Cloud Sync</span>
             </button>
         </nav>
 
@@ -602,6 +606,48 @@
                             </tfoot>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cloud Sync Modal -->
+    <div id="syncModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+            <div class="p-8 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h3 class="text-2xl font-bold">Cloud Sync Settings</h3>
+                <button onclick="toggleModal('syncModal')" class="text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="p-8 space-y-6">
+                <div class="space-y-2">
+                    <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Google Apps Script URL</label>
+                    <input type="text" id="syncUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                    <p class="text-[10px] text-gray-500 italic">Syncs your data with a Google Sheet for cross-device access.</p>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="uploadToCloud()" class="flex flex-col items-center justify-center p-4 bg-accent-blue/10 hover:bg-accent-blue/20 rounded-2xl border border-accent-blue/20 transition-all group">
+                        <i data-lucide="cloud-upload" class="w-6 h-6 text-accent-blue mb-2 group-hover:-translate-y-1 transition-transform"></i>
+                        <span class="text-xs font-bold uppercase tracking-wider">Upload to Cloud</span>
+                    </button>
+                    <button onclick="downloadFromCloud()" class="flex flex-col items-center justify-center p-4 bg-accent-green/10 hover:bg-accent-green/20 rounded-2xl border border-accent-green/20 transition-all group">
+                        <i data-lucide="cloud-download" class="w-6 h-6 text-accent-green mb-2 group-hover:translate-y-1 transition-transform"></i>
+                        <span class="text-xs font-bold uppercase tracking-wider">Fetch from Cloud</span>
+                    </button>
+                </div>
+
+                <div id="syncStatus" class="p-3 rounded-lg text-center text-xs font-bold uppercase tracking-widest hidden"></div>
+
+                <div class="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                    <p class="text-[10px] text-yellow-500 leading-tight">
+                        <strong>How to get this URL?</strong><br>
+                        1. Create a Google Sheet<br>
+                        2. Extensions > Apps Script<br>
+                        3. Paste the provided code and Deploy as Web App<br>
+                        4. Copy the Web App URL here.
+                    </p>
                 </div>
             </div>
         </div>
