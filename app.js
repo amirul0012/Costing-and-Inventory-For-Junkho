@@ -18,7 +18,7 @@ function loadState() {
     let syncUrl = localStorage.getItem('junkho_sync_url');
     if (!syncUrl) {
         // Pre-set with provided URL
-        syncUrl = 'https://script.google.com/macros/s/AKfycbxn3JkoeobFteBhjfGPffgMw9FMrhCnjKu7IGeTayNWxIYXtyaFYXyIW6rO33HtUjA65A/exec';
+        syncUrl = 'https://script.google.com/macros/s/AKfycbw9w7Gb7uUyTPwR7Y7PWttevkXzzvAfs3G4vHeVjX2yjf8KLRvhEcZROMllYbQj7ZDKnA/exec';
         localStorage.setItem('junkho_sync_url', syncUrl);
     }
     
