@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Junkho Studio - Financial & Inventory Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            100: '#1e1e1e',
+                            200: '#121212',
+                            300: '#0a0a0a',
+                        },
+                        accent: {
+                            green: '#10b981',
+                            red: '#ef4444',
+                            blue: '#3b82f6',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0a0a0a;
+            color: #e5e7eb;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-card {
+            background: rgba(30, 30, 30, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.2);
+            border-left: 4px solid #3b82f6;
+            color: #3b82f6;
+        }
+        input, select {
+            background-color: #1e1e1e !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+            color: #f3f4f6 !important;
+        }
+        input:focus {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+            outline: none;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex">
+    <!-- Sidebar -->
+    <aside class="w-64 glass-card h-screen sticky top-0 flex flex-col p-6 space-y-8 z-50">
+        <div class="flex flex-col items-center mb-8 pt-2">
+            <img src="logo.png" alt="Junkho Studio Logo" class="w-48 h-auto object-contain brightness-125 drop-shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+        </div>
+
+        <nav class="flex-1 space-y-2">
+            <button onclick="showSection('dashboard')" id="nav-dashboard" class="sidebar-link w-full flex items-center space-x-3 p-3 rounded-lg transition-all hover:bg-white/5 active">
+                <i data-lucide="home" class="w-5 h-5"></i>
+                <span class="font-medium">Dashboard</span>
+            </button>
+            <button onclick="showSection('projects')" id="nav-projects" class="sidebar-link w-full flex items-center space-x-3 p-3 rounded-lg transition-all hover:bg-white/5">
+                <i data-lucide="briefcase" class="w-5 h-5"></i>
+                <span class="font-medium">Projects</span>
+            </button>
+            <button onclick="showSection('inventory')" id="nav-inventory" class="sidebar-link w-full flex items-center space-x-3 p-3 rounded-lg transition-all hover:bg-white/5">
+                <i data-lucide="box" class="w-5 h-5"></i>
+                <span class="font-medium">Inventory</span>
+            </button>
+        </nav>
+
+        <div class="space-y-4 pt-6 border-t border-white/10">
+            <h4 class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] px-2">Reports & Data</h4>
+            
+            <button id="downloadReport" class="w-full flex items-center space-x-3 bg-accent-blue hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-500/20 group">
+                <i data-lucide="file-text" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                <span>Excel Report</span>
+            </button>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="exportData()" class="flex flex-col items-center justify-center p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all group" title="Backup all data to a file">
+                    <i data-lucide="upload-cloud" class="w-5 h-5 text-accent-blue mb-1 group-hover:-translate-y-1 transition-transform"></i>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Backup</span>
+                </button>
+                <button onclick="triggerImport()" class="flex flex-col items-center justify-center p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all group" title="Restore data from a backup file">
+                    <i data-lucide="download-cloud" class="w-5 h-5 text-accent-green mb-1 group-hover:translate-y-1 transition-transform"></i>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Restore</span>
+                </button>
+            </div>
+            <input type="file" id="importFileInput" class="hidden" accept=".json" onchange="importData(event)">
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-10 overflow-y-auto">
+        <!-- Dashboard Section -->
+        <section id="section-dashboard" class="space-y-10">
+            <header>
+                <h2 class="text-3xl font-bold">Dashboard Summary</h2>
+                <p class="text-gray-400 mt-1">Overview of Junkho Studio's financial health.</p>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Main Stats Column -->
+                <div class="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Card 1: Total Sales -->
+                    <div class="glass-card p-8 rounded-3xl relative overflow-hidden group border border-white/5 hover:border-accent-green/30 transition-all">
+                        <div class="absolute -right-4 -top-4 w-32 h-32 bg-accent-green/5 rounded-full blur-3xl group-hover:bg-accent-green/10 transition-all"></div>
+                        <div class="flex items-center justify-between">
+                            <div class="p-3 bg-accent-green/20 rounded-2xl text-accent-green">
+                                <i data-lucide="trending-up" class="w-6 h-6"></i>
+                            </div>
+                            <span class="text-[10px] font-bold text-accent-green bg-accent-green/10 px-2 py-1 rounded-lg uppercase tracking-widest">Revenue</span>
+                        </div>
+                        <div class="mt-8">
+                            <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Total Sales (Revenue)</p>
+                            <h3 id="stat-total-sales" class="text-5xl font-black mt-2 text-white">RM 0.00</h3>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Total Company Wallet -->
+                    <div class="glass-card p-8 rounded-3xl relative overflow-hidden group border border-white/5 hover:border-accent-blue/30 transition-all">
+                        <div class="absolute -right-4 -top-4 w-32 h-32 bg-accent-blue/5 rounded-full blur-3xl group-hover:bg-accent-blue/10 transition-all"></div>
+                        <div class="flex items-center justify-between">
+                            <div class="p-3 bg-accent-blue/20 rounded-2xl text-accent-blue">
+                                <i data-lucide="wallet" class="w-6 h-6"></i>
+                            </div>
+                            <span class="text-[10px] font-bold text-accent-blue bg-accent-blue/10 px-2 py-1 rounded-lg uppercase tracking-widest">Net Cash</span>
+                        </div>
+                        <div class="mt-8">
+                            <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Total Company Wallet</p>
+                            <h3 id="stat-total-wallet" class="text-5xl font-black mt-2 text-white">RM 0.00</h3>
+                            <p id="wallet-status" class="text-xs mt-3 font-bold uppercase tracking-widest hidden p-1 bg-accent-red/20 rounded inline-block">Loss Warning</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Secondary Stats Column -->
+                <div class="lg:col-span-4 flex flex-col gap-6">
+                    <!-- Combined Directors Payout Card -->
+                    <div class="glass-card p-6 rounded-3xl border border-white/5 bg-white/[0.02]">
+                        <div class="flex items-center space-x-3 mb-6">
+                            <div class="p-2 bg-purple-500/20 rounded-xl text-purple-400">
+                                <i data-lucide="users" class="w-5 h-5"></i>
+                            </div>
+                            <h4 class="font-bold text-gray-300 uppercase text-xs tracking-widest">Director Payouts</h4>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Afiq's Share</p>
+                                <p id="stat-afiq-share" class="text-xl font-bold text-white mt-1">RM 0.00</p>
+                            </div>
+                            <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Amirul's Share</p>
+                                <p id="stat-amirul-share" class="text-xl font-bold text-white mt-1">RM 0.00</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Projects Count Card -->
+                    <div class="glass-card p-6 rounded-3xl flex items-center justify-between border border-white/5 bg-white/[0.02]">
+                        <div class="flex items-center space-x-4">
+                            <div class="p-3 bg-white/5 rounded-2xl text-gray-400">
+                                <i data-lucide="check-circle" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Completed</p>
+                                <h3 id="stat-total-projects" class="text-2xl font-black text-white">0</h3>
+                            </div>
+                        </div>
+                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest border border-white/10 px-3 py-1 rounded-full">Projects</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics & Distribution -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Recent Activity / Chart -->
+                <div class="glass-card p-8 rounded-3xl">
+                    <h4 class="text-xl font-bold mb-6">Income & Material Cost (By Month)</h4>
+                    <div id="dashboardChart" class="h-64 flex items-end space-x-6 pb-2 border-b border-white/5">
+                        <!-- Dynamic chart content from app.js -->
+                    </div>
+                </div>
+
+                <!-- Distribution Summary -->
+                <div class="glass-card p-8 rounded-3xl flex flex-col justify-between">
+                    <div>
+                        <h4 class="text-xl font-bold mb-6">Distribution Summary</h4>
+                        <div class="space-y-6">
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-400">Total Material Cost (Suppliers)</span>
+                                    <span id="dist-material-cost" class="font-bold text-accent-red">RM 0.00</span>
+                                </div>
+                                <div class="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                                    <div id="bar-material-cost" class="bg-accent-red h-full transition-all duration-500" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-400">Total Director Payouts (Shares)</span>
+                                    <span id="dist-director-payouts" class="font-bold text-accent-blue">RM 0.00</span>
+                                </div>
+                                <div class="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                                    <div id="bar-director-payouts" class="bg-accent-blue h-full transition-all duration-500" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-400">Remaining Company Funds</span>
+                                    <span id="dist-company-funds" class="font-bold text-accent-green">RM 0.00</span>
+                                </div>
+                                <div class="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                                    <div id="bar-company-funds" class="bg-accent-green h-full transition-all duration-500" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="overall-status-indicator" class="mt-8 p-4 rounded-2xl text-center font-bold uppercase tracking-widest text-sm bg-accent-green/10 text-accent-green mt-auto">
+                        Company is Profitable
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Projects Section -->
+        <section id="section-projects" class="hidden space-y-8">
+            <header class="flex justify-between items-end">
+                <div>
+                    <h2 class="text-3xl font-bold">Project Tracker</h2>
+                    <p class="text-gray-400 mt-1">Manage project finances and payouts.</p>
+                </div>
+                <button onclick="toggleModal('projectModal')" class="bg-accent-blue hover:bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold flex items-center space-x-2 transition-all">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                    <span>New Project</span>
+                </button>
+            </header>
+
+            <div class="glass-card rounded-3xl overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-white/5 border-b border-white/10">
+                            <tr>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider">Date</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider">Project Name</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider">Location</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider text-accent-red">Raw Material Cost</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider">Total Value</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider text-accent-green">Net Profit</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="projectsTableBody">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                        <tfoot class="bg-white/5 border-t border-white/10">
+                            <tr class="font-bold text-white uppercase text-xs tracking-widest">
+                                <td colspan="6" class="p-6 text-right text-gray-400">Add New Project?</td>
+                                <td class="p-6">
+                                    <button onclick="openAddProjectModal()" class="bg-accent-blue hover:bg-blue-600 text-white px-6 py-2 rounded-xl transition-all shadow-lg hover:shadow-blue-500/20 whitespace-nowrap">
+                                        + New Project
+                                    </button>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div id="no-projects-message" class="p-20 text-center text-gray-500 hidden">
+                    <i data-lucide="folder-open" class="w-16 h-16 mx-auto mb-4 opacity-20"></i>
+                    <p class="text-xl">No projects found. Add your first project!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Inventory Section -->
+        <section id="section-inventory" class="hidden space-y-8">
+            <header class="flex justify-between items-end">
+                <div>
+                    <h2 class="text-3xl font-bold">Current Inventory</h2>
+                    <p class="text-gray-400 mt-1">Track and manage raw material stock levels.</p>
+                </div>
+                <button onclick="toggleModal('inventoryModal')" class="bg-accent-blue hover:bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold flex items-center space-x-2 transition-all">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                    <span>Add Item</span>
+                </button>
+            </header>
+
+            <div class="glass-card rounded-3xl overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-white/5 border-b border-white/10">
+                            <tr>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider">Item Name</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider">Unit</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider">Unit Price (RM)</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider">Current Quantity</th>
+                                <th class="p-6 font-semibold text-gray-400 uppercase text-xs tracking-wider text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="no-inventory-message" class="p-20 text-center text-gray-500 hidden">
+                    <i data-lucide="package" class="w-16 h-16 mx-auto mb-4 opacity-20"></i>
+                    <p class="text-xl">Inventory is empty. Add materials to get started.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Project Modal -->
+    <div id="projectModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-8 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h3 id="projectModalTitle" class="text-2xl font-bold">Add New Project</h3>
+                <button onclick="toggleModal('projectModal')" class="text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="p-8 overflow-y-auto flex-1">
+                <form id="projectForm" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <input type="hidden" name="editProjectId" id="editProjectId">
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Date</label>
+                        <input type="date" name="date" required class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Project Name</label>
+                        <input type="text" name="name" placeholder="E.g. Penthouse Renovation" required class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                    </div>
+                    <div class="space-y-2 md:col-span-2">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Location</label>
+                        <input type="text" name="location" placeholder="E.g. Kuala Lumpur, Malaysia" required class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Manual Extra Cost (RM)</label>
+                        <input type="number" name="materialCost" min="0" step="0.01" placeholder="0.00" class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                        <p class="text-[10px] text-gray-500 italic">Added on top of Inventory materials.</p>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Total Project Value (RM)</label>
+                        <input type="number" name="totalValue" min="0" step="0.01" placeholder="0.00" required class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                    </div>
+
+                    <!-- Payout Strategy -->
+                    <div class="md:col-span-2 space-y-4">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider block">Payout Strategy</label>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <label class="cursor-pointer group">
+                                <input type="radio" name="payoutStrategy" value="fixed_10" checked class="hidden peer">
+                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-2 h-2 rounded-full bg-accent-blue"></div>
+                                        <span class="font-bold">Standard 10%</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 mt-1">Directors get 10% of Total Value</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer group">
+                                <input type="radio" name="payoutStrategy" value="equal_3" class="hidden peer">
+                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-2 h-2 rounded-full bg-accent-green"></div>
+                                        <span class="font-bold">Equal 3-Way</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 mt-1">Divide Gross Profit by 3</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer group">
+                                <input type="radio" name="payoutStrategy" value="manual" class="hidden peer">
+                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-2 h-2 rounded-full bg-accent-red"></div>
+                                        <span class="font-bold">Manual Input</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 mt-1">Define custom share amounts</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Manual Shares Input (Hidden by default) -->
+                    <div id="manualSharesContainer" class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-white/5 rounded-2xl border border-white/10 hidden">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Afiq's Share (RM)</label>
+                            <input type="number" name="manualAfiq" step="0.01" placeholder="0.00" class="w-full p-3 rounded-xl bg-black/20 border border-white/10 focus:border-accent-blue outline-none text-sm">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Amirul's Share (RM)</label>
+                            <input type="number" name="manualAmirul" step="0.01" placeholder="0.00" class="w-full p-3 rounded-xl bg-black/20 border border-white/10 focus:border-accent-blue outline-none text-sm">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Company Share (RM)</label>
+                            <input type="number" name="manualCompany" step="0.01" placeholder="0.00" class="w-full p-3 rounded-xl bg-black/20 border border-white/10 focus:border-accent-blue outline-none text-sm">
+                        </div>
+                        <p class="md:col-span-3 text-[10px] text-accent-red italic">Note: Manual inputs will override auto-calculations.</p>
+                    </div>
+
+                    <div class="md:col-span-2 bg-white/5 p-6 rounded-2xl space-y-4">
+                        <h4 class="font-bold text-gray-300">Preview Calculations</h4>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div class="flex justify-between border-b border-white/5 pb-2">
+                                <span class="text-gray-400">Company Net Profit:</span>
+                                <span id="preview-net-profit" class="font-bold text-accent-green">RM 0.00</span>
+                            </div>
+                            <div class="flex justify-between border-b border-white/5 pb-2">
+                                <span class="text-gray-400">Gross Profit:</span>
+                                <span id="preview-gross-profit" class="font-bold">RM 0.00</span>
+                            </div>
+                            <div class="flex justify-between border-b border-white/5 pb-2">
+                                <span class="text-gray-400">Afiq's Share (10%):</span>
+                                <span id="preview-afiq-share" class="font-bold">RM 0.00</span>
+                            </div>
+                            <div class="flex justify-between border-b border-white/5 pb-2">
+                                <span class="text-gray-400">Amirul's Share (10%):</span>
+                                <span id="preview-amirul-share" class="font-bold">RM 0.00</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 mt-4">
+                            <div class="bg-black/20 p-3 rounded-lg text-center">
+                                <p class="text-[10px] uppercase text-gray-500">Deposit (50%)</p>
+                                <p id="preview-deposit" class="font-bold text-xs">RM 0.00</p>
+                            </div>
+                            <div class="bg-black/20 p-3 rounded-lg text-center">
+                                <p class="text-[10px] uppercase text-gray-500">Progress (40%)</p>
+                                <p id="preview-progress" class="font-bold text-xs">RM 0.00</p>
+                            </div>
+                            <div class="bg-black/20 p-3 rounded-lg text-center">
+                                <p class="text-[10px] uppercase text-gray-500">Final (10%)</p>
+                                <p id="preview-final" class="font-bold text-xs">RM 0.00</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-2 pt-4">
+                        <button type="submit" id="projectSubmitBtn" class="w-full bg-accent-blue hover:bg-blue-600 text-white font-bold py-4 rounded-xl transition-all">
+                            Save Project
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Modal -->
+    <div id="inventoryModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+            <div class="p-8 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h3 class="text-2xl font-bold">Add Inventory Item</h3>
+                <button onclick="toggleModal('inventoryModal')" class="text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="p-8">
+                <form id="inventoryForm" class="space-y-6">
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Item Name</label>
+                        <input type="text" name="itemName" placeholder="E.g. Timber Plank" required class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Unit</label>
+                            <select name="unit" class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none appearance-none">
+                                <option value="pcs">pcs</option>
+                                <option value="kg">kg</option>
+                                <option value="liters">liters</option>
+                                <option value="meters">meters</option>
+                                <option value="feet">feet</option>
+                                <option value="packs">packs</option>
+                            </select>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Unit Price (RM)</label>
+                            <input type="number" name="unitPrice" min="0" step="0.01" placeholder="0.00" required class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Initial Quantity</label>
+                            <input type="number" name="quantity" min="0" placeholder="0" required class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-accent-blue hover:bg-blue-600 text-white font-bold py-4 rounded-xl transition-all">
+                        Add to Inventory
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Stock Modal -->
+    <div id="stockModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden">
+            <div class="p-8 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h3 class="text-2xl font-bold">Update Stock</h3>
+                <button onclick="toggleModal('stockModal')" class="text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="p-8">
+                <form id="stockForm" class="space-y-6">
+                    <input type="hidden" name="itemId">
+                    <div class="text-center mb-4">
+                        <h4 id="stockItemName" class="text-xl font-semibold">Item Name</h4>
+                        <p id="currentStockDisplay" class="text-gray-400">Current: 0 pcs</p>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider text-center block">New Quantity</label>
+                        <input type="number" name="newQuantity" min="0" required class="w-full p-6 text-3xl font-bold text-center rounded-2xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" onclick="adjustStock(-1)" class="p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-all font-bold text-xl">-1</button>
+                        <button type="button" onclick="adjustStock(1)" class="p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-all font-bold text-xl">+1</button>
+                    </div>
+                    <button type="submit" class="w-full bg-accent-blue hover:bg-blue-600 text-white font-bold py-4 rounded-xl transition-all">
+                        Update Quantity
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Materials Modal -->
+    <div id="materialsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-8 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <div>
+                    <h3 class="text-2xl font-bold">Manage Project Materials</h3>
+                    <p id="materialsProjectTitle" class="text-accent-blue text-sm font-medium"></p>
+                </div>
+                <button onclick="toggleModal('materialsModal')" class="text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="p-8 overflow-y-auto flex-1">
+                <form id="addMaterialForm" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 bg-white/5 p-6 rounded-2xl border border-white/10">
+                    <input type="hidden" name="projectId">
+                    <div class="md:col-span-2 space-y-2">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Select Item</label>
+                        <select id="materialItemSelect" name="itemId" required class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none appearance-none">
+                            <option value="">Select an item...</option>
+                        </select>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Quantity</label>
+                        <input type="number" name="quantity" min="0.01" step="0.01" placeholder="0.00" required class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
+                    </div>
+                    <button type="submit" class="md:col-span-3 bg-accent-blue hover:bg-blue-600 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center space-x-2">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>Add to Project</span>
+                    </button>
+                </form>
+
+                <div class="space-y-4">
+                    <h4 class="font-bold text-gray-300 flex items-center space-x-2">
+                        <i data-lucide="list" class="w-4 h-4"></i>
+                        <span>Project Material List</span>
+                    </h4>
+                    <div class="border border-white/10 rounded-2xl overflow-hidden">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-white/5">
+                                <th class="p-4 text-gray-400 font-medium">Item Name</th>
+                                <th class="p-4 text-gray-400 font-medium">Qty</th>
+                                <th class="p-4 text-gray-400 font-medium">Unit Price</th>
+                                <th class="p-4 text-gray-400 font-medium text-right">Subtotal</th>
+                                <th class="p-4"></th>
+                            </thead>
+                            <tbody id="projectMaterialsList">
+                                <!-- Materials go here -->
+                            </tbody>
+                            <tfoot class="bg-white/5 font-bold">
+                                <td colspan="3" class="p-4 text-right">Inventory Cost:</td>
+                                <td id="projectMaterialsTotal" class="p-4 text-right text-accent-red">RM 0.00</td>
+                                <td></td>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
