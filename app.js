@@ -15,8 +15,14 @@ function loadState() {
     }
     
     // Load Sync URL
-    const syncUrl = localStorage.getItem('junkho_sync_url');
-    if (syncUrl) {
+    let syncUrl = localStorage.getItem('junkho_sync_url');
+    if (!syncUrl) {
+        // Pre-set with provided URL
+        syncUrl = 'https://script.google.com/macros/s/AKfycbxn3JkoeobFteBhjfGPffgMw9FMrhCnjKu7IGeTayNWxIYXtyaFYXyIW6rO33HtUjA65A/exec';
+        localStorage.setItem('junkho_sync_url', syncUrl);
+    }
+    
+    if (document.getElementById('syncUrlInput')) {
         document.getElementById('syncUrlInput').value = syncUrl;
     }
     
@@ -27,6 +33,12 @@ function loadState() {
 function saveState() {
     localStorage.setItem('junkho_studio_data', JSON.stringify(state));
     updateDashboard();
+    
+    // Auto-sync if URL is configured
+    const syncUrl = localStorage.getItem('junkho_sync_url');
+    if (syncUrl) {
+        uploadToCloud(true); // Call with silent flag
+    }
 }
 
 // --- Navigation ---
@@ -716,32 +728,30 @@ function importData(event) {
 }
 
 // --- Cloud Sync Logic ---
-async function uploadToCloud() {
-    const url = document.getElementById('syncUrlInput').value.trim();
+async function uploadToCloud(silent = false) {
+    const url = document.getElementById('syncUrlInput')?.value.trim() || localStorage.getItem('junkho_sync_url');
     if (!url) {
-        alert("Please enter a Google Apps Script URL first.");
+        if (!silent) alert("Please enter a Google Apps Script URL first.");
         return;
     }
 
     localStorage.setItem('junkho_sync_url', url);
-    updateSyncStatus('Syncing...', 'bg-blue-500/20 text-blue-400');
+    if (!silent) updateSyncStatus('Syncing...', 'bg-blue-500/20 text-blue-400');
 
     try {
         const response = await fetch(url, {
             method: 'POST',
-            mode: 'no-cors', // Standard Apps Script approach
+            mode: 'no-cors',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(state)
         });
         
-        // Note: With no-cors, we can't read the response body, 
-        // but it's the only way to avoid CORS errors with regular App Script URLs from browser.
-        updateSyncStatus('Successfully Uploaded!', 'bg-accent-green/20 text-accent-green');
+        if (!silent) updateSyncStatus('Successfully Uploaded!', 'bg-accent-green/20 text-accent-green');
     } catch (error) {
         console.error('Upload error:', error);
-        updateSyncStatus('Upload Failed', 'bg-accent-red/20 text-accent-red');
+        if (!silent) updateSyncStatus('Upload Failed', 'bg-accent-red/20 text-accent-red');
     }
 }
 
