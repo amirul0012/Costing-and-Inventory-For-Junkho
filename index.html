@@ -34,43 +34,104 @@
     </script>
     <style>
         body {
-            background-color: #0a0a0a;
-            color: #e5e7eb;
+            background-color: #111111;
+            color: #d4d4d8; 
             font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
         }
+
+        /* Simplified, flat professional cards instead of glass */
         .glass-card {
-            background: rgba(30, 30, 30, 0.6);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #18181b !important; 
+            border: 1px solid #27272a !important; 
+            backdrop-filter: none !important;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
         }
-        .sidebar-link.active {
-            background: rgba(59, 130, 246, 0.2);
-            border-left: 4px solid #3b82f6;
-            color: #3b82f6;
+        
+        /* Restrict oversized border radiuses for a tighter look */
+        .rounded-3xl, .rounded-2xl {
+            border-radius: 0.75rem !important; 
         }
+
+        /* Remove decorative glowing orbs entirely */
+        .blur-3xl {
+            display: none !important;
+        }
+
+        /* Tone down primary typography weight */
+        .font-black {
+            font-weight: 700 !important;
+            letter-spacing: -0.025em !important;
+        }
+
+        /* Clean up table headers and internal card dividers */
+        .bg-white\/\[0\.02\] { background-color: transparent !important; }
+        .bg-white\/5 { background-color: transparent !important; border-bottom: 1px solid #27272a !important; }
+        .border-white\/5, .border-white\/10 { border-color: #27272a !important; }
+
+        /* Subtle Internal Modals & Tables */
+        table thead { border-bottom: 1px solid #27272a; }
+        
+        /* Professional Input Fields */
         input, select {
-            background-color: #1e1e1e !important;
-            border-color: rgba(255, 255, 255, 0.1) !important;
-            color: #f3f4f6 !important;
+            background-color: #111111 !important;
+            border: 1px solid #3f3f46 !important;
+            color: #fafafa !important;
+            border-radius: 0.5rem !important;
+            box-shadow: none !important;
         }
-        input:focus {
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+        input:focus, select:focus {
+            border-color: #a1a1aa !important;
+            box-shadow: 0 0 0 1px #a1a1aa !important;
             outline: none;
         }
+
+        /* Simple Sidebar Highlights */
+        .sidebar-link {
+            color: #a1a1aa !important;
+        }
+        .sidebar-link.active {
+            background: #27272a !important;
+            border-left: none !important;
+            color: #fafafa !important;
+            font-weight: 500;
+        }
+        .sidebar-link:hover {
+            color: #fafafa !important;
+            background: #27272a !important;
+        }
+
+        /* Premium Buttons - Minimalist White */
+        button.bg-accent-blue, button:hover.bg-blue-600 {
+            background-color: #fafafa !important;
+            color: #09090b !important;
+            border: 1px solid #e4e4e7 !important;
+            box-shadow: none !important;
+            font-weight: 600 !important;
+        }
+        button.bg-accent-blue:hover {
+            background-color: #e4e4e7 !important;
+        }
+        
+        /* Tone down text colors to softer shades */
+        .text-white { color: #f4f4f5 !important; }
+        .text-gray-400 { color: #a1a1aa !important; }
+        .text-gray-500 { color: #71717a !important; }
+
+        .text-accent-green { color: #4ade80 !important; } 
+        .text-accent-blue { color: #60a5fa !important; } 
+        .text-accent-red { color: #f87171 !important; } 
+
+        /* Adjust UI tag contrast */
+        .bg-accent-green\/10 { background-color: #14532d !important; border: 1px solid #166534 !important; color: #86efac !important; }
+        .bg-accent-red\/10 { background-color: #7f1d1d !important; border: 1px solid #991b1b !important; color: #fca5a5 !important; }
+        .bg-accent-blue\/10 { background-color: #1e3a8a !important; border: 1px solid #1e40af !important; color: #93c5fd !important; }
+
         /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0a0a0a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #333;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #444;
-        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #111111; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
     </style>
 </head>
 <body class="min-h-screen flex">
@@ -93,10 +154,6 @@
                 <i data-lucide="box" class="w-5 h-5"></i>
                 <span class="font-medium">Inventory</span>
             </button>
-            <button onclick="toggleModal('syncModal')" class="sidebar-link w-full flex items-center space-x-3 p-3 rounded-lg transition-all hover:bg-accent-blue/10 text-accent-blue hover:text-blue-400">
-                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
-                <span class="font-medium">Cloud Sync</span>
-            </button>
         </nav>
 
         <div class="space-y-4 pt-6 border-t border-white/10">
@@ -107,17 +164,7 @@
                 <span>Excel Report</span>
             </button>
 
-            <div class="grid grid-cols-2 gap-2">
-                <button onclick="exportData()" class="flex flex-col items-center justify-center p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all group" title="Backup all data to a file">
-                    <i data-lucide="upload-cloud" class="w-5 h-5 text-accent-blue mb-1 group-hover:-translate-y-1 transition-transform"></i>
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Backup</span>
-                </button>
-                <button onclick="triggerImport()" class="flex flex-col items-center justify-center p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all group" title="Restore data from a backup file">
-                    <i data-lucide="download-cloud" class="w-5 h-5 text-accent-green mb-1 group-hover:translate-y-1 transition-transform"></i>
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Restore</span>
-                </button>
-            </div>
-            <input type="file" id="importFileInput" class="hidden" accept=".json" onchange="importData(event)">
+
         </div>
     </aside>
 
@@ -378,35 +425,45 @@
                     <!-- Payout Strategy -->
                     <div class="md:col-span-2 space-y-4">
                         <label class="text-sm font-medium text-gray-400 uppercase tracking-wider block">Payout Strategy</label>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <label class="cursor-pointer group">
                                 <input type="radio" name="payoutStrategy" value="fixed_10" checked class="hidden peer">
-                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full">
+                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full flex flex-col justify-center">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-2 h-2 rounded-full bg-accent-blue"></div>
-                                        <span class="font-bold">Standard 10%</span>
+                                        <span class="font-bold text-sm">Standard 10%</span>
                                     </div>
-                                    <p class="text-[10px] text-gray-500 mt-1">Directors get 10% of Total Value</p>
+                                    <p class="text-[10px] text-gray-500 mt-1">Directors get 10% of Total</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer group">
+                                <input type="radio" name="payoutStrategy" value="amirul_only" class="hidden peer">
+                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full flex flex-col justify-center">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-2 h-2 rounded-full bg-purple-500"></div>
+                                        <span class="font-bold text-sm">Amirul Only</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 mt-1">Only Amirul gets 10%</p>
                                 </div>
                             </label>
                             <label class="cursor-pointer group">
                                 <input type="radio" name="payoutStrategy" value="equal_3" class="hidden peer">
-                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full">
+                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full flex flex-col justify-center">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-2 h-2 rounded-full bg-accent-green"></div>
-                                        <span class="font-bold">Equal 3-Way</span>
+                                        <span class="font-bold text-sm">Equal 3-Way</span>
                                     </div>
                                     <p class="text-[10px] text-gray-500 mt-1">Divide Gross Profit by 3</p>
                                 </div>
                             </label>
                             <label class="cursor-pointer group">
                                 <input type="radio" name="payoutStrategy" value="manual" class="hidden peer">
-                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full">
+                                <div class="p-4 rounded-2xl border border-white/10 group-hover:bg-white/5 peer-checked:border-accent-blue peer-checked:bg-accent-blue/10 transition-all h-full flex flex-col justify-center">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-2 h-2 rounded-full bg-accent-red"></div>
-                                        <span class="font-bold">Manual Input</span>
+                                        <span class="font-bold text-sm">Manual Input</span>
                                     </div>
-                                    <p class="text-[10px] text-gray-500 mt-1">Define custom share amounts</p>
+                                    <p class="text-[10px] text-gray-500 mt-1">Define custom amounts</p>
                                 </div>
                             </label>
                         </div>
@@ -611,47 +668,7 @@
         </div>
     </div>
 
-    <!-- Cloud Sync Modal -->
-    <div id="syncModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
-        <div class="glass-card w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
-            <div class="p-8 border-b border-white/10 flex justify-between items-center bg-white/5">
-                <h3 class="text-2xl font-bold">Cloud Sync Settings</h3>
-                <button onclick="toggleModal('syncModal')" class="text-gray-400 hover:text-white transition-colors">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
-            <div class="p-8 space-y-6">
-                <div class="space-y-2">
-                    <label class="text-sm font-medium text-gray-400 uppercase tracking-wider">Google Apps Script URL</label>
-                    <input type="text" id="syncUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-4 rounded-xl border border-white/10 focus:border-accent-blue transition-all outline-none">
-                    <p class="text-[10px] text-gray-500 italic">Syncs your data with a Google Sheet for cross-device access.</p>
-                </div>
-                
-                <div class="grid grid-cols-2 gap-4">
-                    <button onclick="uploadToCloud()" class="flex flex-col items-center justify-center p-4 bg-accent-blue/10 hover:bg-accent-blue/20 rounded-2xl border border-accent-blue/20 transition-all group">
-                        <i data-lucide="cloud-upload" class="w-6 h-6 text-accent-blue mb-2 group-hover:-translate-y-1 transition-transform"></i>
-                        <span class="text-xs font-bold uppercase tracking-wider">Upload to Cloud</span>
-                    </button>
-                    <button onclick="downloadFromCloud()" class="flex flex-col items-center justify-center p-4 bg-accent-green/10 hover:bg-accent-green/20 rounded-2xl border border-accent-green/20 transition-all group">
-                        <i data-lucide="cloud-download" class="w-6 h-6 text-accent-green mb-2 group-hover:translate-y-1 transition-transform"></i>
-                        <span class="text-xs font-bold uppercase tracking-wider">Fetch from Cloud</span>
-                    </button>
-                </div>
 
-                <div id="syncStatus" class="p-3 rounded-lg text-center text-xs font-bold uppercase tracking-widest hidden"></div>
-
-                <div class="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-                    <p class="text-[10px] text-yellow-500 leading-tight">
-                        <strong>How to get this URL?</strong><br>
-                        1. Create a Google Sheet<br>
-                        2. Extensions > Apps Script<br>
-                        3. Paste the provided code and Deploy as Web App<br>
-                        4. Copy the Web App URL here.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <script src="app.js"></script>
 </body>

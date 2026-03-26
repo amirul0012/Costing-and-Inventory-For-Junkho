@@ -1,6 +1,45 @@
 // Initialize Lucide Icons
 lucide.createIcons();
 
+// --- Configuration ---
+// REPLACE THIS WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyae-i-PVjc5HVddRNXDsPaZsJ968LEx9ubcFAJJpWsw3vnm3WLxC72kTrHimU3l7xW/exec';
+
+// --- Cloud Sync ---
+let isSyncing = false;
+let syncTimeout = null;
+
+async function uploadToCloud() {
+    if (!WEB_APP_URL || WEB_APP_URL.trim() === '') return;
+
+    try {
+        isSyncing = true;
+        console.log("Syncing updates to Google Sheets...");
+
+        const payload = {
+            action: 'syncAll',
+            projects: state.projects,
+            inventory: state.inventory
+        };
+
+        const response = await fetch(WEB_APP_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        const resData = await response.json();
+        if (resData.status === 'success') {
+            console.log("Successfully synced to Google Sheets.");
+        } else {
+            console.error("Cloud sync returned error:", resData.message);
+        }
+    } catch (err) {
+        console.error("Cloud sync failed:", err);
+    } finally {
+        isSyncing = false;
+    }
+}
+
 // --- State Management ---
 let state = {
     projects: [],
@@ -12,33 +51,20 @@ function loadState() {
     const saved = localStorage.getItem('junkho_studio_data');
     if (saved) {
         state = JSON.parse(saved);
+        renderAll();
     }
-    
-    // Load Sync URL
-    let syncUrl = localStorage.getItem('junkho_sync_url');
-    if (!syncUrl) {
-        // Pre-set with provided URL
-        syncUrl = 'https://script.google.com/macros/s/AKfycbw9w7Gb7uUyTPwR7Y7PWttevkXzzvAfs3G4vHeVjX2yjf8KLRvhEcZROMllYbQj7ZDKnA/exec';
-        localStorage.setItem('junkho_sync_url', syncUrl);
-    }
-    
-    if (document.getElementById('syncUrlInput')) {
-        document.getElementById('syncUrlInput').value = syncUrl;
-    }
-    
-    renderAll();
 }
 
 // Save to LocalStorage
 function saveState() {
     localStorage.setItem('junkho_studio_data', JSON.stringify(state));
     updateDashboard();
-    
-    // Auto-sync if URL is configured
-    const syncUrl = localStorage.getItem('junkho_sync_url');
-    if (syncUrl) {
-        uploadToCloud(true); // Call with silent flag
-    }
+
+    // Auto sync to cloud if configured (Debounced to prevent spamming requests)
+    if (syncTimeout) clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+        uploadToCloud();
+    }, 1500);
 }
 
 // --- Navigation ---
@@ -47,7 +73,7 @@ function showSection(sectionId) {
         section.classList.add('hidden');
     });
     document.getElementById(`section-${sectionId}`).classList.remove('hidden');
-    
+
     // Update Sidebar Active State
     document.querySelectorAll('.sidebar-link').forEach(link => {
         link.classList.remove('active');
@@ -86,17 +112,18 @@ if (projectForm) {
         };
 
         const calcs = calculateProjectFinances(materialCost, totalValue, [], payoutStrategy, manualData);
-        
+
         document.getElementById('preview-gross-profit').textContent = formatCurrency(calcs.grossProfit);
         document.getElementById('preview-afiq-share').textContent = formatCurrency(calcs.afiqShare);
         document.getElementById('preview-amirul-share').textContent = formatCurrency(calcs.amirulShare);
         document.getElementById('preview-net-profit').textContent = formatCurrency(calcs.netProfit);
-        
+
         // Update labels to reflect strategy
         let shareLabel = '(10% Share)';
         if (payoutStrategy === 'equal_3') shareLabel = '(1/3 Split)';
         if (payoutStrategy === 'manual') shareLabel = '(Manual)';
-        
+        if (payoutStrategy === 'amirul_only') shareLabel = '(Amirul Only)';
+
         document.querySelector('span[id="preview-afiq-share"]').previousElementSibling.textContent = `Afiq's Share ${shareLabel}:`;
         document.querySelector('span[id="preview-amirul-share"]').previousElementSibling.textContent = `Amirul's Share ${shareLabel}:`;
 
@@ -105,15 +132,67 @@ if (projectForm) {
         document.getElementById('preview-final').textContent = formatCurrency(calcs.final);
     });
 
+    projectForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const formData = new FormData(projectForm);
+        const editId = formData.get('editProjectId');
+
+        const manualCost = parseFloat(formData.get('materialCost')) || 0;
+        const totalValue = parseFloat(formData.get('totalValue')) || 0;
+        const payoutStrategy = formData.get('payoutStrategy') || 'fixed_10';
+
+        const manualData = {
+            afiq: parseFloat(formData.get('manualAfiq')) || 0,
+            amirul: parseFloat(formData.get('manualAmirul')) || 0,
+            company: parseFloat(formData.get('manualCompany')) || 0
+        };
+
+        const projectData = {
+            date: formData.get('date'),
+            name: formData.get('name'),
+            location: formData.get('location'),
+            manualMaterialCost: manualCost,
+            totalValue: totalValue,
+            payoutStrategy: payoutStrategy,
+            manualShares: payoutStrategy === 'manual' ? manualData : null,
+            ...calculateProjectFinances(manualCost, totalValue, [], payoutStrategy, manualData)
+        };
+
+        if (editId) {
+            const index = state.projects.findIndex(p => p.id == editId);
+            if (index !== -1) {
+                const existingMaterials = state.projects[index].materials || [];
+                state.projects[index] = {
+                    ...state.projects[index],
+                    ...projectData,
+                    materials: existingMaterials,
+                    ...calculateProjectFinances(manualCost, totalValue, existingMaterials, payoutStrategy, manualData)
+                };
+            }
+        } else {
+            state.projects.push({
+                id: Date.now(),
+                materials: [],
+                ...projectData
+            });
+        }
+
+        saveState();
+        renderProjects();
+        projectForm.reset();
+        toggleModal('projectModal');
+    });
+}
+
 function openAddProjectModal() {
-    projectForm.reset();
+    const form = document.getElementById('projectForm');
+    if (form) form.reset();
     document.getElementById('editProjectId').value = '';
     document.getElementById('projectModalTitle').textContent = 'Add New Project';
     document.getElementById('projectSubmitBtn').textContent = 'Save Project';
     document.getElementById('manualSharesContainer').classList.add('hidden');
     toggleModal('projectModal');
-    // Trigger input event to reset preview
-    projectForm.dispatchEvent(new Event('input'));
+    if (form) form.dispatchEvent(new Event('input'));
 }
 
 function openEditProjectModal(projectId) {
@@ -124,98 +203,40 @@ function openEditProjectModal(projectId) {
     document.getElementById('projectModalTitle').textContent = 'Edit Project';
     document.getElementById('projectSubmitBtn').textContent = 'Update Project';
 
-    const form = projectForm;
-    form.date.value = project.date;
-    form.name.value = project.name;
-    form.location.value = project.location;
-    form.materialCost.value = project.manualMaterialCost;
-    form.totalValue.value = project.totalValue;
-    
-    // Set strategy
-    const strategyRadios = form.querySelectorAll('input[name="payoutStrategy"]');
-    strategyRadios.forEach(radio => {
-        if (radio.value === (project.payoutStrategy || 'fixed_10')) {
-            radio.checked = true;
-        }
-    });
+    const form = document.getElementById('projectForm');
+    if (form) {
+        form.date.value = project.date;
+        form.name.value = project.name;
+        form.location.value = project.location;
+        form.materialCost.value = project.manualMaterialCost;
+        form.totalValue.value = project.totalValue;
 
-    // Set manual shares if applicable
-    if (project.payoutStrategy === 'manual' && project.manualShares) {
-        form.manualAfiq.value = project.manualShares.afiq;
-        form.manualAmirul.value = project.manualShares.amirul;
-        form.manualCompany.value = project.manualShares.company;
-        document.getElementById('manualSharesContainer').classList.remove('hidden');
-    } else {
-        document.getElementById('manualSharesContainer').classList.add('hidden');
-    }
-
-    toggleModal('projectModal');
-    // Trigger input event to update preview
-    projectForm.dispatchEvent(new Event('input'));
-}
-
-projectForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const formData = new FormData(projectForm);
-    const editId = formData.get('editProjectId');
-    
-    const manualCost = parseFloat(formData.get('materialCost')) || 0;
-    const totalValue = parseFloat(formData.get('totalValue')) || 0;
-    const payoutStrategy = formData.get('payoutStrategy') || 'fixed_10';
-
-    const manualData = {
-        afiq: parseFloat(formData.get('manualAfiq')) || 0,
-        amirul: parseFloat(formData.get('manualAmirul')) || 0,
-        company: parseFloat(formData.get('manualCompany')) || 0
-    };
-
-    const projectData = {
-        date: formData.get('date'),
-        name: formData.get('name'),
-        location: formData.get('location'),
-        manualMaterialCost: manualCost,
-        totalValue: totalValue,
-        payoutStrategy: payoutStrategy,
-        manualShares: payoutStrategy === 'manual' ? manualData : null,
-        ...calculateProjectFinances(manualCost, totalValue, [], payoutStrategy, manualData)
-    };
-
-    if (editId) {
-        // Update existing project
-        const index = state.projects.findIndex(p => p.id == editId);
-        if (index !== -1) {
-            // Preserve existing materials if any
-            const existingMaterials = state.projects[index].materials || [];
-            
-            state.projects[index] = {
-                ...state.projects[index],
-                ...projectData,
-                materials: existingMaterials,
-                // Re-calculate with linked materials
-                ...calculateProjectFinances(manualCost, totalValue, existingMaterials, payoutStrategy, manualData)
-            };
-        }
-    } else {
-        // Create new project
-        state.projects.push({
-            id: Date.now(),
-            materials: [],
-            ...projectData
+        const strategyRadios = form.querySelectorAll('input[name="payoutStrategy"]');
+        strategyRadios.forEach(radio => {
+            if (radio.value === (project.payoutStrategy || 'fixed_10')) {
+                radio.checked = true;
+            }
         });
-    }
 
-    saveState();
-    renderProjects();
-    projectForm.reset();
-    toggleModal('projectModal');
-});
+        if (project.payoutStrategy === 'manual' && project.manualShares) {
+            form.manualAfiq.value = project.manualShares.afiq;
+            form.manualAmirul.value = project.manualShares.amirul;
+            form.manualCompany.value = project.manualShares.company;
+            document.getElementById('manualSharesContainer').classList.remove('hidden');
+        } else {
+            document.getElementById('manualSharesContainer').classList.add('hidden');
+        }
+
+        toggleModal('projectModal');
+        form.dispatchEvent(new Event('input'));
+    }
 }
 
 function calculateProjectFinances(manualCost, totalValue, linkedMaterials, payoutStrategy = 'fixed_10', manualData = null) {
     const inventoryCost = linkedMaterials.reduce((sum, m) => sum + (m.quantity * m.unitPrice), 0);
     const totalMaterialCost = manualCost + inventoryCost;
     const grossProfit = totalValue - totalMaterialCost;
-    
+
     let afiqShare, amirulShare, netProfit;
 
     if (payoutStrategy === 'manual' && manualData) {
@@ -227,6 +248,10 @@ function calculateProjectFinances(manualCost, totalValue, linkedMaterials, payou
         afiqShare = equalSplit;
         amirulShare = equalSplit;
         netProfit = equalSplit;
+    } else if (payoutStrategy === 'amirul_only') {
+        afiqShare = 0;
+        amirulShare = totalValue * 0.10;
+        netProfit = grossProfit - amirulShare;
     } else {
         afiqShare = totalValue * 0.10;
         amirulShare = totalValue * 0.10;
@@ -248,9 +273,9 @@ function calculateProjectFinances(manualCost, totalValue, linkedMaterials, payou
 function renderProjects() {
     const tableBody = document.getElementById('projectsTableBody');
     const noProjects = document.getElementById('no-projects-message');
-    
+
     tableBody.innerHTML = '';
-    
+
     if (state.projects.length === 0) {
         noProjects.classList.remove('hidden');
     } else {
@@ -264,7 +289,7 @@ function renderProjects() {
                     <div class="font-bold text-white">${project.name}</div>
                     <div class="flex items-center space-x-2 mt-1">
                         <span class="text-[10px] px-2 py-0.5 rounded bg-white/5 text-gray-500 uppercase font-bold tracking-tighter">
-                            ${project.payoutStrategy === 'equal_3' ? 'Equal Split' : (project.payoutStrategy === 'manual' ? 'Manual' : 'Standard 10%')}
+                            ${project.payoutStrategy === 'equal_3' ? 'Equal Split' : (project.payoutStrategy === 'manual' ? 'Manual' : (project.payoutStrategy === 'amirul_only' ? 'Amirul Only' : 'Standard 10%'))}
                         </span>
                         <div class="text-[10px] text-gray-500 uppercase tracking-tighter">
                             MILESTONES: DEP(50%): ${formatCurrency(project.deposit)} | PRG(40%): ${formatCurrency(project.progress)} | FIN(10%): ${formatCurrency(project.final)}
@@ -313,7 +338,7 @@ if (inventoryForm) {
     inventoryForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const formData = new FormData(inventoryForm);
-        
+
         const item = {
             id: Date.now(),
             name: formData.get('itemName'),
@@ -333,9 +358,9 @@ if (inventoryForm) {
 function renderInventory() {
     const tableBody = document.getElementById('inventoryTableBody');
     const noInventory = document.getElementById('no-inventory-message');
-    
+
     tableBody.innerHTML = '';
-    
+
     if (state.inventory.length === 0) {
         noInventory.classList.remove('hidden');
     } else {
@@ -386,7 +411,7 @@ function openStockModal(id) {
     form.newQuantity.value = item.quantity;
     document.getElementById('stockItemName').textContent = item.name;
     document.getElementById('currentStockDisplay').textContent = `Current: ${item.quantity} ${item.unit}`;
-    
+
     toggleModal('stockModal');
 }
 
@@ -401,7 +426,7 @@ document.getElementById('stockForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const id = parseInt(e.target.itemId.value);
     const newQty = parseFloat(e.target.newQuantity.value);
-    
+
     const index = state.inventory.findIndex(i => i.id === id);
     if (index !== -1) {
         state.inventory[index].quantity = Math.max(0, newQty);
@@ -419,16 +444,16 @@ function updateDashboard() {
     const totalAmirulShare = state.projects.reduce((sum, p) => sum + p.amirulShare, 0);
     const totalPayoutsVal = totalAfiqShare + totalAmirulShare;
     const totalProjectsVal = state.projects.length;
-    
+
     // Formula: Net Company = Total Customer Pay - (Total Raw Materials + Total Afiq Share + Total Amirul Share)
     const netCompanyWallet = totalCustomerPay - (totalRawMaterials + totalPayoutsVal);
 
     const walletCard = document.getElementById('stat-total-wallet');
     walletCard.textContent = formatCurrency(netCompanyWallet);
-    
+
     const walletStatus = document.getElementById('wallet-status');
     const indicator = document.getElementById('overall-status-indicator');
-    
+
     if (netCompanyWallet < 0) {
         walletCard.classList.add('text-accent-red');
         walletCard.classList.remove('text-white');
@@ -472,35 +497,35 @@ function updateDashboardChart() {
     const labels = [];
     const profits = [];
     const costs = [];
-    
+
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const monthYear = d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
-        
+
         const monthProjects = state.projects.filter(p => {
             const pDate = new Date(p.date);
             return pDate.getMonth() === d.getMonth() && pDate.getFullYear() === d.getFullYear();
         });
-        
+
         const monthProfit = monthProjects.reduce((sum, p) => sum + p.netProfit, 0);
         const monthCost = monthProjects.reduce((sum, p) => sum + p.totalMaterialCost, 0);
-        
+
         labels.push(monthYear);
         profits.push(monthProfit);
         costs.push(monthCost);
     }
 
     const maxVal = Math.max(...profits, ...costs, 100);
-    
+
     chartContainer.innerHTML = '';
     profits.forEach((p, idx) => {
         const dayDiv = document.createElement('div');
         dayDiv.className = 'flex-1 group relative flex flex-col justify-end items-center h-full space-y-2';
-        
+
         const profitPct = (p / maxVal) * 100;
         const costPct = (costs[idx] / maxVal) * 100;
-        
+
         dayDiv.innerHTML = `
             <div class="flex space-x-1 items-end h-full w-full">
                 <div class="flex-1 bg-accent-green/20 rounded-t-lg hover:bg-accent-green/40 transition-all cursor-pointer relative" style="height: ${Math.max(5, profitPct)}%">
@@ -523,7 +548,7 @@ function openMaterialsModal(projectId) {
 
     document.getElementById('materialsProjectTitle').textContent = project.name;
     document.querySelector('#addMaterialForm input[name="projectId"]').value = projectId;
-    
+
     // Populate Item Dropdown
     const select = document.getElementById('materialItemSelect');
     select.innerHTML = '<option value="">Select an item...</option>';
@@ -542,12 +567,12 @@ function renderProjectMaterials(projectId) {
     const project = state.projects.find(p => p.id === projectId);
     const list = document.getElementById('projectMaterialsList');
     list.innerHTML = '';
-    
+
     let total = 0;
     project.materials.forEach((m, idx) => {
         const subtotal = m.quantity * m.unitPrice;
         total += subtotal;
-        
+
         const row = document.createElement('tr');
         row.className = 'border-b border-white/5';
         row.innerHTML = `
@@ -563,7 +588,7 @@ function renderProjectMaterials(projectId) {
         `;
         list.appendChild(row);
     });
-    
+
     document.getElementById('projectMaterialsTotal').textContent = formatCurrency(total);
     lucide.createIcons();
 }
@@ -607,12 +632,12 @@ document.getElementById('addMaterialForm').addEventListener('submit', (e) => {
 
 function removeMaterialFromProject(projectId, materialIndex) {
     if (!confirm('Remove this material? Stock will NOT be automatically restored.')) return;
-    
+
     const project = state.projects.find(p => p.id === projectId);
     project.materials.splice(materialIndex, 1);
-    
+
     Object.assign(project, calculateProjectFinances(project.manualMaterialCost, project.totalValue, project.materials));
-    
+
     saveState();
     renderAll();
     renderProjectMaterials(projectId);
@@ -620,7 +645,7 @@ function removeMaterialFromProject(projectId, materialIndex) {
 
 // --- Utils ---
 function formatCurrency(amount) {
-    return 'RM ' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    return 'RM ' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function renderAll() {
@@ -637,7 +662,7 @@ document.getElementById('downloadReport').addEventListener('click', () => {
     }
 
     const wb = XLSX.utils.book_new();
-    
+
     // Project Data
     const projectSheetData = state.projects.map(p => ({
         Date: p.date,
@@ -653,20 +678,20 @@ document.getElementById('downloadReport').addEventListener('click', () => {
         'Progress (40%)': p.progress,
         'Final (10%)': p.final
     }));
-    
+
     const ws_projects = XLSX.utils.json_to_sheet(projectSheetData);
     XLSX.utils.book_append_sheet(wb, ws_projects, "Projects");
-    
+
     // Inventory Data
     const inventorySheetData = state.inventory.map(i => ({
         'Item Name': i.name,
         Unit: i.unit,
         Quantity: i.quantity
     }));
-    
+
     const ws_inventory = XLSX.utils.json_to_sheet(inventorySheetData);
     XLSX.utils.book_append_sheet(wb, ws_inventory, "Inventory");
-    
+
     // Financial Summary
     const summaryData = [
         ['Summary Metric', 'Value'],
@@ -684,10 +709,10 @@ document.getElementById('downloadReport').addEventListener('click', () => {
 // --- Backup & Sync (Data Portability) ---
 function exportData() {
     const dataStr = JSON.stringify(state, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
     const exportFileDefaultName = `junkho_data_backup_${new Date().toISOString().split('T')[0]}.json`;
-    
+
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
@@ -703,10 +728,10 @@ function importData(event) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         try {
             const importedState = JSON.parse(e.target.result);
-            
+
             // Basic validation
             if (!importedState.projects || !importedState.inventory) {
                 throw new Error("Invalid backup file format.");
@@ -727,78 +752,7 @@ function importData(event) {
     reader.readAsText(file);
 }
 
-// --- Cloud Sync Logic ---
-async function uploadToCloud(silent = false) {
-    const url = document.getElementById('syncUrlInput')?.value.trim() || localStorage.getItem('junkho_sync_url');
-    if (!url) {
-        if (!silent) alert("Please enter a Google Apps Script URL first.");
-        return;
-    }
 
-    localStorage.setItem('junkho_sync_url', url);
-    if (!silent) updateSyncStatus('Syncing...', 'bg-blue-500/20 text-blue-400');
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(state)
-        });
-        
-        if (!silent) updateSyncStatus('Successfully Uploaded!', 'bg-accent-green/20 text-accent-green');
-    } catch (error) {
-        console.error('Upload error:', error);
-        if (!silent) updateSyncStatus('Upload Failed', 'bg-accent-red/20 text-accent-red');
-    }
-}
-
-async function downloadFromCloud() {
-    const url = document.getElementById('syncUrlInput').value.trim();
-    if (!url) {
-        alert("Please enter a Google Apps Script URL first.");
-        return;
-    }
-
-    localStorage.setItem('junkho_sync_url', url);
-    updateSyncStatus('Fetching...', 'bg-blue-500/20 text-blue-400');
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Network response was not ok');
-        
-        const cloudData = await response.json();
-        
-        if (cloudData && (cloudData.projects || cloudData.inventory)) {
-            if (confirm("Data found in cloud! This will overwrite your current local data. Continue?")) {
-                state = cloudData;
-                saveState();
-                renderAll();
-                updateSyncStatus('Data Synced!', 'bg-accent-green/20 text-accent-green');
-            } else {
-                updateSyncStatus('Sync Cancelled', 'bg-yellow-500/20 text-yellow-500');
-            }
-        } else {
-            updateSyncStatus('No Data in Cloud', 'bg-yellow-500/20 text-yellow-500');
-        }
-    } catch (error) {
-        console.error('Download error:', error);
-        updateSyncStatus('Sync Failed', 'bg-accent-red/20 text-accent-red');
-        alert("Make sure the URL is correct and Google App Script is deployed as Web App (Anyone).");
-    }
-}
-
-function updateSyncStatus(text, classes) {
-    const status = document.getElementById('syncStatus');
-    status.textContent = text;
-    status.className = `p-3 rounded-lg text-center text-xs font-bold uppercase tracking-widest ${classes}`;
-    status.classList.remove('hidden');
-    setTimeout(() => {
-        status.classList.add('hidden');
-    }, 3000);
-}
 
 // Initialize
 loadState();
